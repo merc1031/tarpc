@@ -136,6 +136,14 @@ where
             );
             ctx.trace_context.new_child()
         });
+        // Pure fork: stamp the caller's in-process `tracing` span id so the server can
+        // re-parent its RPC span under it. `call` runs in the caller's task, so
+        // `Span::current()` is the originating span. `serde(skip)` on the field keeps
+        // this same-process only.
+        #[cfg(feature = "tracing-registry-parent")]
+        {
+            ctx.trace_context.registry_parent = span.id().map(|id| id.into_u64());
+        }
         span.record("rpc.trace_id", tracing::field::display(ctx.trace_id()));
         let (response_completion, mut response) = oneshot::channel();
         let request_id =

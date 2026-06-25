@@ -47,6 +47,15 @@ pub struct Context {
     /// then the downstream samplers are expected to respect that decision and also sample the
     /// trace. Otherwise, the full trace would not be able to be reconstructed.
     pub sampling_decision: SamplingDecision,
+    /// The in-process `tracing` subscriber span id of the caller.
+    /// The server uses it to re-parent its RPC span under the
+    /// caller's span so that hierarchy-based trace layers
+    /// nest the call. `serde(skip)` keeps it out of the wire format, so it is only
+    /// ever populated on same-process (channel) transports and is always `None`
+    /// across any serializing transport.
+    #[cfg(feature = "tracing-registry-parent")]
+    #[cfg_attr(feature = "serde1", serde(skip))]
+    pub registry_parent: Option<u64>,
 }
 
 /// A 128-bit UUID identifying a trace. All spans caused by the same originating span share the
@@ -83,6 +92,10 @@ impl Context {
             trace_id: self.trace_id,
             span_id: SpanId::random(&mut rand::thread_rng()),
             sampling_decision: self.sampling_decision,
+            // Preserved across both the client `call` and server `start_request`
+            // hops so the originating caller's span id survives to the handler.
+            #[cfg(feature = "tracing-registry-parent")]
+            registry_parent: self.registry_parent,
         }
     }
 }
@@ -180,6 +193,9 @@ impl From<opentelemetry::trace::SpanRef<'_>> for Context {
             trace_id: TraceId::from(otel_ctx.trace_id()),
             span_id: SpanId::from(otel_ctx.span_id()),
             sampling_decision: SamplingDecision::from(otel_ctx),
+            // An OpenTelemetry-derived context carries no in-process registry parent.
+            #[cfg(feature = "tracing-registry-parent")]
+            registry_parent: None,
         }
     }
 }

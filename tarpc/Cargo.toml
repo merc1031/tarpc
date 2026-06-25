@@ -25,6 +25,7 @@ serde-transport = ["serde1", "tokio1", "tokio-serde", "tokio-util/codec"]
 serde-transport-json = ["serde-transport", "tokio-serde/json"]
 serde-transport-bincode = ["serde-transport", "tokio-serde/bincode"]
 tcp = ["tokio/net"]
+tracing-registry-parent = []
 unix = ["tokio/net"]
 
 full = [

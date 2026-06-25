@@ -204,6 +204,28 @@ where
         mut self: Pin<&mut Self>,
         mut request: Request<Req>,
     ) -> Result<TrackedRequest<Req>, AlreadyExistsError> {
+        // When the caller propagated its in-process `tracing` span id
+        // (same-process channel transport only — the field is `serde(skip)`), make the
+        // RPC span an explicit child of it so hierarchy-based trace layers
+        // nest the call under the caller. The span is emitted on a
+        // dedicated `tarpc::rpc` target so apps can enable this carrier span without
+        // also turning on tarpc's per-request event logging (`tarpc::server`). With the
+        // feature off, the span roots exactly as upstream.
+        #[cfg(feature = "tracing-registry-parent")]
+        let span = info_span!(
+            target: "tarpc::rpc",
+            parent: request
+                .context
+                .trace_context
+                .registry_parent
+                .map(tracing::Id::from_u64),
+            "RPC",
+            rpc.trace_id = %request.context.trace_id(),
+            rpc.deadline = %humantime::format_rfc3339(SystemTime::now() + request.context.deadline.time_until()),
+            otel.kind = "server",
+            otel.name = tracing::field::Empty,
+        );
+        #[cfg(not(feature = "tracing-registry-parent"))]
         let span = info_span!(
             "RPC",
             rpc.trace_id = %request.context.trace_id(),
